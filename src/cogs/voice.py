@@ -12,6 +12,14 @@ class Voice(commands.Cog):
         self.levelup_service = LevelUpService()
 
     @commands.Cog.listener()
+    async def on_ready(self) -> None:
+        for guild in self.bot.guilds:
+            for voice_channel in guild.voice_channels:
+                for member in voice_channel.members:
+                    if not member.bot:
+                        self.voice_service.start_session(str(member.id), str(guild.id))
+
+    @commands.Cog.listener()
     async def on_voice_state_update(
         self,
         member: discord.Member,

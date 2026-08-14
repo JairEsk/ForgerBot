@@ -60,4 +60,21 @@ class VoiceService:
         )
 
     def fetch_record(self, user_id: str, guild_id: str) -> VoiceExperienceRecord:
-        return self.voice_repository.fetch(user_id, guild_id)
+        record = self.voice_repository.fetch(user_id, guild_id)
+        key = self._build_key(user_id, guild_id)
+        
+        if key in self._active_sessions:
+            session_start = self._active_sessions[key]
+            ongoing_minutes = int((time.time() - session_start) / 60)
+            
+            if ongoing_minutes > 0:
+                ongoing_xp = ongoing_minutes * XP_PER_VOICE_MINUTE
+                result = self.experience_service.compute_grant(record.xp, record.level, ongoing_xp)
+                
+                return VoiceExperienceRecord(
+                    xp=result.xp,
+                    level=result.level,
+                    total_minutes=record.total_minutes + ongoing_minutes
+                )
+                
+        return record
