@@ -34,3 +34,15 @@ class UserRepository:
                     xp    = excluded.xp,
                     level = excluded.level
             """, (user_id, guild_id, record.xp, record.level))
+
+    def fetch_top_users(self, guild_id: str, limit: int = 10) -> list[tuple[str, TextExperienceRecord]]:
+        with get_connection() as connection:
+            rows = connection.execute(
+                "SELECT user_id, xp, level FROM text_experience WHERE guild_id = ? ORDER BY xp DESC LIMIT ?",
+                (guild_id, limit)
+            ).fetchall()
+
+        return [
+            (row["user_id"], TextExperienceRecord(xp=row["xp"], level=row["level"]))
+            for row in rows
+        ]

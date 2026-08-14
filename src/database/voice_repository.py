@@ -36,3 +36,15 @@ class VoiceRepository:
                     level         = excluded.level,
                     total_minutes = excluded.total_minutes
             """, (user_id, guild_id, record.xp, record.level, record.total_minutes))
+
+    def fetch_top_users(self, guild_id: str, limit: int = 10) -> list[tuple[str, VoiceExperienceRecord]]:
+        with get_connection() as connection:
+            rows = connection.execute(
+                "SELECT user_id, xp, level, total_minutes FROM voice_experience WHERE guild_id = ? ORDER BY xp DESC LIMIT ?",
+                (guild_id, limit)
+            ).fetchall()
+
+        return [
+            (row["user_id"], VoiceExperienceRecord(xp=row["xp"], level=row["level"], total_minutes=row["total_minutes"]))
+            for row in rows
+        ]

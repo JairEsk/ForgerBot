@@ -7,6 +7,7 @@ COGS = [
     "src.cogs.voice",
     "src.cogs.rank",
     "src.cogs.settings",
+    "src.cogs.leaderboard",
 ]
 
 
