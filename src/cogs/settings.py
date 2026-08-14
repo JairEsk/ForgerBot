@@ -54,52 +54,75 @@ class LevelupMessageModal(discord.ui.Modal, title="Edit Level-up Message"):
         await interaction.response.edit_message(embed=embed)
 
 
-class IgnoreChannelSelect(discord.ui.ChannelSelect):
-    def __init__(self, channel_repository: ChannelRepository, guild_repository: GuildRepository):
+class TextChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self, channel_repository: ChannelRepository, guild_repository: GuildRepository, is_ignore: bool):
+        action = "ignore" if is_ignore else "unignore"
         super().__init__(
-            placeholder="Select text/voice channels to ignore...",
-            channel_types=[discord.ChannelType.text, discord.ChannelType.voice],
+            placeholder=f"Select text channels to {action}...",
+            channel_types=[discord.ChannelType.text],
             min_values=1,
             max_values=10
         )
         self.channel_repository = channel_repository
         self.guild_repository = guild_repository
+        self.is_ignore = is_ignore
 
     async def callback(self, interaction: discord.Interaction) -> None:
         guild_id = str(interaction.guild_id)
         for channel in self.values:
-            self.channel_repository.add(str(channel.id), guild_id)
+            if self.is_ignore:
+                self.channel_repository.add(str(channel.id), guild_id)
+            else:
+                self.channel_repository.remove(str(channel.id), guild_id)
 
         embed = build_settings_embed(interaction.guild, self.guild_repository)
         await interaction.response.edit_message(embed=embed, view=self.view)
 
 
-class UnignoreChannelSelect(discord.ui.ChannelSelect):
-    def __init__(self, channel_repository: ChannelRepository, guild_repository: GuildRepository):
+class VoiceChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self, channel_repository: ChannelRepository, guild_repository: GuildRepository, is_ignore: bool):
+        action = "ignore" if is_ignore else "unignore"
         super().__init__(
-            placeholder="Select text/voice channels to unignore...",
-            channel_types=[discord.ChannelType.text, discord.ChannelType.voice],
+            placeholder=f"Select voice channels to {action}...",
+            channel_types=[discord.ChannelType.voice],
             min_values=1,
             max_values=10
         )
         self.channel_repository = channel_repository
         self.guild_repository = guild_repository
+        self.is_ignore = is_ignore
 
     async def callback(self, interaction: discord.Interaction) -> None:
         guild_id = str(interaction.guild_id)
         for channel in self.values:
-            self.channel_repository.remove(str(channel.id), guild_id)
+            if self.is_ignore:
+                self.channel_repository.add(str(channel.id), guild_id)
+            else:
+                self.channel_repository.remove(str(channel.id), guild_id)
 
         embed = build_settings_embed(interaction.guild, self.guild_repository)
         await interaction.response.edit_message(embed=embed, view=self.view)
 
 
-class ChannelsView(discord.ui.View):
+class TextChannelsView(discord.ui.View):
     def __init__(self, channel_repository: ChannelRepository, guild_repository: GuildRepository):
         super().__init__(timeout=120)
         self.guild_repository = guild_repository
-        self.add_item(IgnoreChannelSelect(channel_repository, guild_repository))
-        self.add_item(UnignoreChannelSelect(channel_repository, guild_repository))
+        self.add_item(TextChannelSelect(channel_repository, guild_repository, is_ignore=True))
+        self.add_item(TextChannelSelect(channel_repository, guild_repository, is_ignore=False))
+
+    @discord.ui.button(label="← Back", style=discord.ButtonStyle.secondary, row=2)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        embed = build_settings_embed(interaction.guild, self.guild_repository)
+        await interaction.response.edit_message(embed=embed, view=MainView(self.guild_repository))
+
+
+class VoiceChannelsView(discord.ui.View):
+    def __init__(self, channel_repository: ChannelRepository, guild_repository: GuildRepository):
+        super().__init__(timeout=120)
+        self.guild_repository = guild_repository
+        self.add_item(VoiceChannelSelect(channel_repository, guild_repository, is_ignore=True))
+        self.add_item(VoiceChannelSelect(channel_repository, guild_repository, is_ignore=False))
 
     @discord.ui.button(label="← Back", style=discord.ButtonStyle.secondary, row=2)
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -152,21 +175,27 @@ class MainView(discord.ui.View):
     async def levelup_channel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.edit_message(view=LevelUpChannelView(self.guild_repository))
 
-    @discord.ui.button(label="🔇 Channels", style=discord.ButtonStyle.primary)
-    async def channels(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+    @discord.ui.button(label="💬 Text Channels", style=discord.ButtonStyle.primary, row=0)
+    async def text_channels(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.edit_message(
-            view=ChannelsView(self.channel_repository, self.guild_repository)
+            view=TextChannelsView(self.channel_repository, self.guild_repository)
         )
 
-    @discord.ui.button(label="⏱ Cooldown", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="🎙️ Voice Channels", style=discord.ButtonStyle.primary, row=0)
+    async def voice_channels(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.edit_message(
+            view=VoiceChannelsView(self.channel_repository, self.guild_repository)
+        )
+
+    @discord.ui.button(label="⏱ Cooldown", style=discord.ButtonStyle.secondary, row=1)
     async def cooldown(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.send_modal(CooldownModal(self.guild_repository))
 
-    @discord.ui.button(label="📢 Message", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="📢 Message", style=discord.ButtonStyle.secondary, row=1)
     async def message(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.send_modal(LevelupMessageModal(self.guild_repository))
 
-    @discord.ui.button(label="✖ Close", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="✖ Close", style=discord.ButtonStyle.danger, row=2)
     async def close(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer()
         await interaction.delete_original_response()
