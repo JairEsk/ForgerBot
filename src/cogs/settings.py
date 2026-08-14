@@ -57,8 +57,8 @@ class LevelupMessageModal(discord.ui.Modal, title="Edit Level-up Message"):
 class IgnoreChannelSelect(discord.ui.ChannelSelect):
     def __init__(self, channel_repository: ChannelRepository, guild_repository: GuildRepository):
         super().__init__(
-            placeholder="Select channels to ignore...",
-            channel_types=[discord.ChannelType.text],
+            placeholder="Select text/voice channels to ignore...",
+            channel_types=[discord.ChannelType.text, discord.ChannelType.voice],
             min_values=1,
             max_values=10
         )
@@ -77,8 +77,8 @@ class IgnoreChannelSelect(discord.ui.ChannelSelect):
 class UnignoreChannelSelect(discord.ui.ChannelSelect):
     def __init__(self, channel_repository: ChannelRepository, guild_repository: GuildRepository):
         super().__init__(
-            placeholder="Select channels to unignore...",
-            channel_types=[discord.ChannelType.text],
+            placeholder="Select text/voice channels to unignore...",
+            channel_types=[discord.ChannelType.text, discord.ChannelType.voice],
             min_values=1,
             max_values=10
         )
