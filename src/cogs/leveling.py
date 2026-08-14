@@ -2,18 +2,20 @@ import discord
 from discord.ext import commands
 from src.services.experience_service import ExperienceService
 from src.services.cooldown_service import CooldownService
+from src.services.levelup_service import LevelUpService
+from src.database.user_repository import UserRepository, TextExperienceRecord
 from src.database.channel_repository import ChannelRepository
-from src.database.guild_repository import GuildRepository
 
 
 class Leveling(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.user_repository = UserRepository()
         self.experience_service = ExperienceService()
         self.cooldown_service = CooldownService()
         self.channel_repository = ChannelRepository()
-        self.guild_repository = GuildRepository()
+        self.levelup_service = LevelUpService()
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
@@ -31,26 +33,14 @@ class Leveling(commands.Cog):
 
         self.cooldown_service.register(user_id, guild_id)
 
+        current_record = self.user_repository.fetch(user_id, guild_id)
         xp_to_grant = self.experience_service.random_message_xp()
-        result = self.experience_service.grant_xp(user_id, guild_id, xp_to_grant)
+        result = self.experience_service.compute_grant(current_record.xp, current_record.level, xp_to_grant)
+
+        self.user_repository.save(user_id, guild_id, TextExperienceRecord(xp=result.xp, level=result.level))
 
         if result.leveled_up:
-            await self._send_levelup_message(message.channel, message.author, result.record.level, guild_id)
-
-    async def _send_levelup_message(
-        self,
-        channel: discord.TextChannel,
-        member: discord.Member,
-        new_level: int,
-        guild_id: str
-    ) -> None:
-        settings = self.guild_repository.fetch_settings(guild_id)
-        formatted_message = settings.levelup_message.replace(
-            "{user}", member.mention
-        ).replace(
-            "{level}", str(new_level)
-        )
-        await channel.send(formatted_message)
+            await self.levelup_service.announce_text_levelup(message, result.level)
 
 
 async def setup(bot: commands.Bot) -> None:

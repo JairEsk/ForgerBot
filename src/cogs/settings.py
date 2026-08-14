@@ -107,11 +107,50 @@ class ChannelsView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=MainView(self.guild_repository))
 
 
+class LevelUpChannelView(discord.ui.View):
+    def __init__(self, guild_repository: GuildRepository):
+        super().__init__(timeout=120)
+        self.guild_repository = guild_repository
+        self.add_item(LevelUpChannelSelect(guild_repository))
+
+    @discord.ui.button(label="Remove (use same channel)", style=discord.ButtonStyle.danger, row=1)
+    async def remove_channel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        self.guild_repository.save_levelup_channel(str(interaction.guild_id), None)
+        embed = build_settings_embed(interaction.guild, self.guild_repository)
+        await interaction.response.edit_message(embed=embed, view=MainView(self.guild_repository))
+
+    @discord.ui.button(label="← Back", style=discord.ButtonStyle.secondary, row=1)
+    async def back(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        embed = build_settings_embed(interaction.guild, self.guild_repository)
+        await interaction.response.edit_message(embed=embed, view=MainView(self.guild_repository))
+
+
+class LevelUpChannelSelect(discord.ui.ChannelSelect):
+    def __init__(self, guild_repository: GuildRepository):
+        super().__init__(
+            placeholder="Select level-up announcement channel...",
+            channel_types=[discord.ChannelType.text],
+            min_values=1,
+            max_values=1
+        )
+        self.guild_repository = guild_repository
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        selected_channel = self.values[0]
+        self.guild_repository.save_levelup_channel(str(interaction.guild_id), str(selected_channel.id))
+        embed = build_settings_embed(interaction.guild, self.guild_repository)
+        await interaction.response.edit_message(embed=embed, view=self.view)
+
+
 class MainView(discord.ui.View):
     def __init__(self, guild_repository: GuildRepository, channel_repository: ChannelRepository = None):
         super().__init__(timeout=120)
         self.guild_repository = guild_repository
         self.channel_repository = channel_repository or ChannelRepository()
+
+    @discord.ui.button(label="📣 Level-up Channel", style=discord.ButtonStyle.primary)
+    async def levelup_channel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.edit_message(view=LevelUpChannelView(self.guild_repository))
 
     @discord.ui.button(label="🔇 Channels", style=discord.ButtonStyle.primary)
     async def channels(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -142,13 +181,19 @@ def build_settings_embed(guild: discord.Guild, guild_repository: GuildRepository
         if ignored_channels else "None"
     )
 
+    levelup_channel_display = (
+        f"<#{settings.levelup_channel_id}>"
+        if settings.levelup_channel_id else "Same channel as message"
+    )
+
     embed = discord.Embed(
         title="⚙️ ForgerBot — Level System Configuration",
         color=discord.Color.blurple()
     )
-    embed.add_field(name="⏱ Cooldown", value=f"`{settings.cooldown}s`", inline=True)
-    embed.add_field(name="🔇 Ignored Channels", value=ignored_channels_display, inline=True)
-    embed.add_field(name="📢 Level-up Message", value=f"`{settings.levelup_message}`", inline=False)
+    embed.add_field(name="⏱ Cooldown",           value=f"`{settings.cooldown}s`", inline=True)
+    embed.add_field(name="📣 Level-up Channel",   value=levelup_channel_display, inline=True)
+    embed.add_field(name="🔇 Ignored Channels",   value=ignored_channels_display, inline=False)
+    embed.add_field(name="📢 Level-up Message",   value=f"`{settings.levelup_message}`", inline=False)
     embed.set_footer(text=f"Server: {guild.name}")
 
     return embed

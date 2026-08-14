@@ -1,6 +1,7 @@
 import time
 from dataclasses import dataclass
-from src.database.voice_repository import VoiceRepository
+from src.database.voice_repository import VoiceRepository, VoiceExperienceRecord
+from src.services.experience_service import ExperienceService, XP_PER_VOICE_MINUTE
 
 MINIMUM_MINUTES_TO_GRANT_XP = 1
 
@@ -9,12 +10,15 @@ MINIMUM_MINUTES_TO_GRANT_XP = 1
 class VoiceSessionResult:
     minutes_spent: int
     xp_earned: int
+    new_level: int
+    leveled_up: bool
 
 
 class VoiceService:
 
     def __init__(self):
         self.voice_repository = VoiceRepository()
+        self.experience_service = ExperienceService()
         self._active_sessions: dict[str, float] = {}
 
     def _build_key(self, user_id: str, guild_id: str) -> str:
@@ -36,12 +40,24 @@ class VoiceService:
         if minutes_spent < MINIMUM_MINUTES_TO_GRANT_XP:
             return None
 
-        from src.services.experience_service import XP_PER_VOICE_MINUTE
         xp_earned = minutes_spent * XP_PER_VOICE_MINUTE
 
-        self.voice_repository.add_minutes(user_id, guild_id, minutes_spent)
+        current_record = self.voice_repository.fetch(user_id, guild_id)
+        result = self.experience_service.compute_grant(current_record.xp, current_record.level, xp_earned)
 
-        return VoiceSessionResult(minutes_spent=minutes_spent, xp_earned=xp_earned)
+        updated_record = VoiceExperienceRecord(
+            xp=result.xp,
+            level=result.level,
+            total_minutes=current_record.total_minutes + minutes_spent
+        )
+        self.voice_repository.save(user_id, guild_id, updated_record)
 
-    def fetch_total_minutes(self, user_id: str, guild_id: str) -> int:
-        return self.voice_repository.fetch(user_id, guild_id).total_minutes
+        return VoiceSessionResult(
+            minutes_spent=minutes_spent,
+            xp_earned=xp_earned,
+            new_level=result.level,
+            leveled_up=result.leveled_up
+        )
+
+    def fetch_record(self, user_id: str, guild_id: str) -> VoiceExperienceRecord:
+        return self.voice_repository.fetch(user_id, guild_id)

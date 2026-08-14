@@ -1,8 +1,7 @@
 import discord
 from discord.ext import commands
 from src.services.voice_service import VoiceService
-from src.services.experience_service import ExperienceService
-from src.database.guild_repository import GuildRepository
+from src.services.levelup_service import LevelUpService
 
 
 class Voice(commands.Cog):
@@ -10,8 +9,7 @@ class Voice(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.voice_service = VoiceService()
-        self.experience_service = ExperienceService()
-        self.guild_repository = GuildRepository()
+        self.levelup_service = LevelUpService()
 
     @commands.Cog.listener()
     async def on_voice_state_update(
@@ -38,27 +36,8 @@ class Voice(commands.Cog):
             if session_result is None:
                 return
 
-            xp_result = self.experience_service.grant_xp(user_id, guild_id, session_result.xp_earned)
-
-            if xp_result.leveled_up:
-                announcement_channel = member.guild.system_channel
-                if announcement_channel:
-                    await self._send_levelup_message(announcement_channel, member, xp_result.record.level, guild_id)
-
-    async def _send_levelup_message(
-        self,
-        channel: discord.TextChannel,
-        member: discord.Member,
-        new_level: int,
-        guild_id: str
-    ) -> None:
-        settings = self.guild_repository.fetch_settings(guild_id)
-        formatted_message = settings.levelup_message.replace(
-            "{user}", member.mention
-        ).replace(
-            "{level}", str(new_level)
-        )
-        await channel.send(formatted_message)
+            if session_result.leveled_up:
+                await self.levelup_service.announce_voice_levelup(member, session_result.new_level)
 
 
 async def setup(bot: commands.Bot) -> None:
