@@ -30,8 +30,6 @@ class LevelUpService:
         
         if target_channel:
             await target_channel.send(formatted_message)
-        else:
-            await message.channel.send(formatted_message)
 
     async def announce_voice_levelup(self, member: discord.Member, new_level: int) -> None:
         settings = self.guild_repository.fetch_settings(str(member.guild.id))
@@ -41,9 +39,4 @@ class LevelUpService:
 
         if target_channel:
             await target_channel.send(formatted_message)
-        else:
-            try:
-                await member.send(f"🎙 {formatted_message}")
-            except discord.Forbidden:
-                pass
 
