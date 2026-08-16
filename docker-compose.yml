@@ -14,5 +14,25 @@ services:
       # Mount a named volume at /data inside the container
       - forgerbot_data:/data
 
+  backup_service:
+    build: ./backup
+    container_name: forgerbot_backup
+    restart: unless-stopped
+    environment:
+      - DATABASE_PATH=/data/data.db
+      - BACKUP_DIR=/backup
+      # S3 details can be injected via Dokploy
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - DAILY_RETENTION=${DAILY_RETENTION:-7}
+      - WEEKLY_RETENTION=${WEEKLY_RETENTION:-4}
+    volumes:
+      - forgerbot_data:/data:ro # Read-only access to DB
+      - forgerbot_backups:/backup # Separate volume for backups
+
 volumes:
   forgerbot_data:
+  forgerbot_backups:
