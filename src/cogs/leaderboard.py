@@ -13,41 +13,35 @@ class Leaderboard(commands.Cog):
         self.user_repository = UserRepository()
         self.voice_repository = VoiceRepository()
 
-    @app_commands.command(name="leaderboard", description="Shows the top 10 members with the most XP.")
-    @app_commands.choices(category=[
-        app_commands.Choice(name="Text XP", value="text"),
-        app_commands.Choice(name="Voice XP", value="voice"),
-    ])
-    async def leaderboard(self, interaction: discord.Interaction, category: app_commands.Choice[str]) -> None:
+    @app_commands.command(name="leaderboard", description="Shows the server leaderboard.")
+    async def leaderboard(self, interaction: discord.Interaction) -> None:
         guild_id = str(interaction.guild_id)
-        
+
         embed = discord.Embed(
-            title=f"🏆 {interaction.guild.name} Leaderboard",
+            title="🏆 Guild Leaderboard",
             color=discord.Color.gold()
         )
 
-        if category.value == "text":
-            top_users = self.user_repository.fetch_top_users(guild_id, limit=10)
-            if not top_users:
-                embed.description = "No one has earned text XP yet."
-            else:
-                description = ""
-                for index, (user_id, record) in enumerate(top_users, start=1):
-                    description += f"**{index}.** <@{user_id}> — **Lvl {record.level}** ({record.xp} XP)\n"
-                embed.description = description
-                embed.set_footer(text="Category: Text XP")
+        # Text leaderboard
+        top_text = self.user_repository.fetch_top_users(guild_id, limit=10)
+        if top_text:
+            text_lines = ""
+            for i, (user_id, record) in enumerate(top_text, start=1):
+                text_lines += f"**#{i}** <@{user_id}> XP: **{record.xp}**\n"
+        else:
+            text_lines = "No data yet."
+        embed.add_field(name="TOP 10 MESSAGES 💬", value=text_lines, inline=True)
 
-        elif category.value == "voice":
-            top_users = self.voice_repository.fetch_top_users(guild_id, limit=10)
-            if not top_users:
-                embed.description = "No one has earned voice XP yet."
-            else:
-                description = ""
-                for index, (user_id, record) in enumerate(top_users, start=1):
-                    time_str = format_voice_time(record.total_minutes)
-                    description += f"**{index}.** <@{user_id}> — **Lvl {record.level}** ({record.xp} XP) 🎙 {time_str}\n"
-                embed.description = description
-                embed.set_footer(text="Category: Voice XP")
+        # Voice leaderboard
+        top_voice = self.voice_repository.fetch_top_users(guild_id, limit=10)
+        if top_voice:
+            voice_lines = ""
+            for i, (user_id, record) in enumerate(top_voice, start=1):
+                time_str = format_voice_time(record.total_minutes)
+                voice_lines += f"**#{i}** <@{user_id}> 🕐 **{time_str}**\n"
+        else:
+            voice_lines = "No data yet."
+        embed.add_field(name="TOP 10 VOICE 🔊", value=voice_lines, inline=True)
 
         await interaction.response.send_message(embed=embed)
 

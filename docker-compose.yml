@@ -6,12 +6,12 @@ services:
     container_name: forgerbot
     restart: unless-stopped
     environment:
-      # El token se inyectará desde las variables de entorno de Dokploy
+      # Token injected from Dokploy environment variables
       - DISCORD_TOKEN=${DISCORD_TOKEN}
-      # Redirigimos la base de datos a la carpeta del volumen persistente
+      # Redirect database to persistent volume path
       - DATABASE_PATH=/data/data.db
     volumes:
-      # Montamos un volumen nombrado en la ruta /data del contenedor
+      # Mount a named volume at /data inside the container
       - forgerbot_data:/data
 
 volumes:
