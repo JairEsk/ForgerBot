@@ -1,5 +1,5 @@
 import discord
-from src.database.guild_repository import GuildRepository
+from src.database.guild_repository import GuildRepository, GuildSettings
 
 
 class LevelUpService:
@@ -15,7 +15,7 @@ class LevelUpService:
 
         return None
 
-    def _format_message(self, settings, member: discord.Member, new_level: int) -> str:
+    def _format_message(self, settings: GuildSettings, member: discord.Member, new_level: int) -> str:
         return settings.levelup_message.replace(
             "{user}", member.mention
         ).replace(
@@ -26,10 +26,8 @@ class LevelUpService:
         settings = self.guild_repository.fetch_settings(str(message.guild.id))
         formatted_message = self._format_message(settings, message.author, new_level)
         
-        target_channel = self.get_configured_channel(message.guild)
-        
-        if target_channel:
-            await target_channel.send(formatted_message)
+        target_channel = self.get_configured_channel(message.guild) or message.channel
+        await target_channel.send(formatted_message)
 
     async def announce_voice_levelup(self, member: discord.Member, new_level: int) -> None:
         settings = self.guild_repository.fetch_settings(str(member.guild.id))

@@ -1,17 +1,17 @@
 FROM python:3.11-slim
 
-# Evita que Python genere archivos .pyc y fuerza a que los logs salgan en tiempo real
+# Prevent Python from writing .pyc files and force real-time log output
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Instalar dependencias
+# Install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar el resto del código
+# Copy the rest of the source code
 COPY . .
 
-# Comando para iniciar el bot
+# Start the bot
 CMD ["python", "main.py"]
