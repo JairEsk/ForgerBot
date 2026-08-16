@@ -28,18 +28,16 @@ class VoiceService:
         key = self._build_key(user_id, guild_id)
         self._active_sessions[key] = time.time()
 
-    def end_session(self, user_id: str, guild_id: str) -> VoiceSessionResult | None:
-        key = self._build_key(user_id, guild_id)
+    def _consume_elapsed_minutes(self, key: str) -> int:
+        checkpoint = self._active_sessions[key]
+        minutes_spent = int((time.time() - checkpoint) / 60)
 
-        if key not in self._active_sessions:
-            return None
+        if minutes_spent > 0:
+            self._active_sessions[key] = checkpoint + minutes_spent * 60
 
-        session_start = self._active_sessions.pop(key)
-        minutes_spent = int((time.time() - session_start) / 60)
+        return minutes_spent
 
-        if minutes_spent < MINIMUM_MINUTES_TO_GRANT_XP:
-            return None
-
+    def _award_minutes(self, user_id: str, guild_id: str, minutes_spent: int) -> VoiceSessionResult:
         xp_earned = minutes_spent * XP_PER_VOICE_MINUTE
 
         current_record = self.voice_repository.fetch(user_id, guild_id)
@@ -58,6 +56,35 @@ class VoiceService:
             new_level=result.level,
             leveled_up=result.leveled_up
         )
+
+    def end_session(self, user_id: str, guild_id: str) -> VoiceSessionResult | None:
+        key = self._build_key(user_id, guild_id)
+
+        if key not in self._active_sessions:
+            return None
+
+        minutes_spent = self._consume_elapsed_minutes(key)
+        self._active_sessions.pop(key)
+
+        if minutes_spent < MINIMUM_MINUTES_TO_GRANT_XP:
+            return None
+
+        return self._award_minutes(user_id, guild_id, minutes_spent)
+
+    def flush_sessions(self) -> list[tuple[str, str, VoiceSessionResult]]:
+        """Persist the time accumulated so far by every active session without ending it."""
+        flushed = []
+
+        for key in list(self._active_sessions):
+            guild_id, user_id = key.split(":", 1)
+            minutes_spent = self._consume_elapsed_minutes(key)
+
+            if minutes_spent < MINIMUM_MINUTES_TO_GRANT_XP:
+                continue
+
+            flushed.append((user_id, guild_id, self._award_minutes(user_id, guild_id, minutes_spent)))
+
+        return flushed
 
     def fetch_record(self, user_id: str, guild_id: str) -> VoiceExperienceRecord:
         record = self.voice_repository.fetch(user_id, guild_id)
