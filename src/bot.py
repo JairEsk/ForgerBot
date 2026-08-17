@@ -2,14 +2,13 @@ import discord
 from discord.ext import commands
 from src.config import PREFIX
 
+from src.services.voice_service import VoiceService
+
 COGS = [
     "src.cogs.leveling",
-    "src.cogs.voice",
-    "src.cogs.rank",
     "src.cogs.settings",
     "src.cogs.leaderboard",
 ]
-
 
 class ForgerBot(commands.Bot):
 
@@ -24,10 +23,17 @@ class ForgerBot(commands.Bot):
             intents=intents,
             help_command=None
         )
+        self.voice_service = VoiceService()
 
     async def setup_hook(self) -> None:
         for cog in COGS:
             await self.load_extension(cog)
+
+        from src.cogs.voice import Voice
+        from src.cogs.rank import Rank
+        
+        await self.add_cog(Voice(self, self.voice_service))
+        await self.add_cog(Rank(self, self.voice_service))
 
         await self.tree.sync()
 
