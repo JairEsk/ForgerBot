@@ -9,9 +9,9 @@ CHECKPOINT_INTERVAL_MINUTES = 1
 
 class Voice(commands.Cog):
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot, voice_service: VoiceService):
         self.bot = bot
-        self.voice_service = VoiceService()
+        self.voice_service = voice_service
         self.levelup_service = LevelUpService()
         self.channel_repository = ChannelRepository()
         self.checkpoint_sessions.start()
@@ -84,7 +84,3 @@ class Voice(commands.Cog):
 
             if session_result.leveled_up:
                 await self.levelup_service.announce_voice_levelup(member, session_result.new_level)
-
-
-async def setup(bot: commands.Bot) -> None:
-    await bot.add_cog(Voice(bot))

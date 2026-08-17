@@ -16,10 +16,10 @@ def format_voice_time(total_minutes: int) -> str:
 
 class Rank(commands.Cog):
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot, voice_service: VoiceService):
         self.bot = bot
         self.user_repository = UserRepository()
-        self.voice_service = VoiceService()
+        self.voice_service = voice_service
         self.experience_service = ExperienceService()
 
     @app_commands.command(name="rank", description="Check your current level, XP and voice stats.")
@@ -50,7 +50,3 @@ class Rank(commands.Cog):
         embed.set_thumbnail(url=target_member.display_avatar.url)
 
         await interaction.response.send_message(embed=embed)
-
-
-async def setup(bot: commands.Bot) -> None:
-    await bot.add_cog(Rank(bot))
