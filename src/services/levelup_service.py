@@ -7,11 +7,21 @@ class LevelUpService:
     def __init__(self):
         self.guild_repository = GuildRepository()
 
-    def get_configured_channel(self, guild: discord.Guild) -> discord.TextChannel | None:
+    async def get_configured_channel(self, guild: discord.Guild) -> discord.TextChannel | None:
         settings = self.guild_repository.fetch_settings(str(guild.id))
 
         if settings.levelup_channel_id is not None:
-            return guild.get_channel(int(settings.levelup_channel_id))
+            try:
+                channel_id = int(settings.levelup_channel_id)
+                channel = guild.get_channel(channel_id)
+                
+                if not channel:
+                    channel = await guild.fetch_channel(channel_id)
+                    
+                if isinstance(channel, discord.TextChannel):
+                    return channel
+            except Exception:
+                pass
 
         return None
 
@@ -26,6 +36,14 @@ class LevelUpService:
         settings = self.guild_repository.fetch_settings(str(message.guild.id))
         formatted_message = self._format_message(settings, message.author, new_level)
         
-        target_channel = self.get_configured_channel(message.guild) or message.channel
-        await target_channel.send(formatted_message)
+        target_channel = await self.get_configured_channel(message.guild) or message.channel
+        
+        try:
+            await target_channel.send(formatted_message)
+        except discord.Forbidden:
+            if target_channel.id != message.channel.id:
+                try:
+                    await message.channel.send(formatted_message)
+                except Exception:
+                    pass
 
