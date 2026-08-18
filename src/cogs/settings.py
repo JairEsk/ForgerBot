@@ -61,32 +61,27 @@ class TextChannelSelect(discord.ui.ChannelSelect):
         self.old_ignored_text = set()
         
         ignored = channel_repository.fetch_all(str(guild.id))
-        defaults = []
         for cid in ignored:
             channel = guild.get_channel(int(cid))
             if channel and channel.type == discord.ChannelType.text:
                 self.old_ignored_text.add(str(cid))
-                defaults.append(discord.SelectDefaultValue(id=int(cid), type=discord.SelectDefaultValueType.channel))
-                if len(defaults) == 25:
-                    break
 
         super().__init__(
-            placeholder="Select text channels to ignore...",
+            placeholder="Select text channels to toggle ignore...",
             channel_types=[discord.ChannelType.text],
-            min_values=0,
-            max_values=25,
-            default_values=defaults
+            min_values=1,
+            max_values=25
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
         guild_id = str(interaction.guild_id)
-        new_ignored_text = {str(c.id) for c in self.values}
         
-        for cid in self.old_ignored_text - new_ignored_text:
-            self.channel_repository.remove(cid, guild_id)
-            
-        for cid in new_ignored_text - self.old_ignored_text:
-            self.channel_repository.add(cid, guild_id)
+        for c in self.values:
+            cid = str(c.id)
+            if cid in self.old_ignored_text:
+                self.channel_repository.remove(cid, guild_id)
+            else:
+                self.channel_repository.add(cid, guild_id)
 
         embed = build_settings_embed(interaction.guild, self.guild_repository)
         await interaction.response.edit_message(embed=embed, view=TextChannelsView(interaction.guild, self.channel_repository, self.guild_repository))
@@ -99,32 +94,27 @@ class VoiceChannelSelect(discord.ui.ChannelSelect):
         self.old_ignored_voice = set()
         
         ignored = channel_repository.fetch_all(str(guild.id))
-        defaults = []
         for cid in ignored:
             channel = guild.get_channel(int(cid))
             if channel and channel.type == discord.ChannelType.voice:
                 self.old_ignored_voice.add(str(cid))
-                defaults.append(discord.SelectDefaultValue(id=int(cid), type=discord.SelectDefaultValueType.channel))
-                if len(defaults) == 25:
-                    break
 
         super().__init__(
-            placeholder="Select voice channels to ignore...",
+            placeholder="Select voice channels to toggle ignore...",
             channel_types=[discord.ChannelType.voice],
-            min_values=0,
-            max_values=25,
-            default_values=defaults
+            min_values=1,
+            max_values=25
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
         guild_id = str(interaction.guild_id)
-        new_ignored_voice = {str(c.id) for c in self.values}
         
-        for cid in self.old_ignored_voice - new_ignored_voice:
-            self.channel_repository.remove(cid, guild_id)
-            
-        for cid in new_ignored_voice - self.old_ignored_voice:
-            self.channel_repository.add(cid, guild_id)
+        for c in self.values:
+            cid = str(c.id)
+            if cid in self.old_ignored_voice:
+                self.channel_repository.remove(cid, guild_id)
+            else:
+                self.channel_repository.add(cid, guild_id)
 
         embed = build_settings_embed(interaction.guild, self.guild_repository)
         await interaction.response.edit_message(embed=embed, view=VoiceChannelsView(interaction.guild, self.channel_repository, self.guild_repository))
@@ -157,27 +147,16 @@ class VoiceChannelsView(discord.ui.View):
 class LevelUpChannelSelect(discord.ui.ChannelSelect):
     def __init__(self, guild: discord.Guild, guild_repository: GuildRepository):
         self.guild_repository = guild_repository
-        settings = guild_repository.fetch_settings(str(guild.id))
-        
-        defaults = []
-        if settings.levelup_channel_id:
-            channel = guild.get_channel(int(settings.levelup_channel_id))
-            if channel and channel.type == discord.ChannelType.text:
-                defaults.append(discord.SelectDefaultValue(id=int(channel.id), type=discord.SelectDefaultValueType.channel))
 
         super().__init__(
             placeholder="Select level-up announcement channel...",
             channel_types=[discord.ChannelType.text],
-            min_values=0,
-            max_values=1,
-            default_values=defaults
+            min_values=1,
+            max_values=1
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        if len(self.values) == 0:
-            self.guild_repository.save_levelup_channel(str(interaction.guild_id), None)
-        else:
-            self.guild_repository.save_levelup_channel(str(interaction.guild_id), str(self.values[0].id))
+        self.guild_repository.save_levelup_channel(str(interaction.guild_id), str(self.values[0].id))
             
         embed = build_settings_embed(interaction.guild, self.guild_repository)
         await interaction.response.edit_message(embed=embed, view=LevelUpChannelView(interaction.guild, self.guild_repository))
@@ -193,6 +172,12 @@ class LevelUpChannelView(discord.ui.View):
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         embed = build_settings_embed(interaction.guild, self.guild_repository)
         await interaction.response.edit_message(embed=embed, view=MainView(interaction.guild, self.guild_repository))
+
+    @discord.ui.button(label="🗑️ Clear Channel", style=discord.ButtonStyle.danger, row=1)
+    async def clear_channel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        self.guild_repository.save_levelup_channel(str(interaction.guild_id), None)
+        embed = build_settings_embed(interaction.guild, self.guild_repository)
+        await interaction.response.edit_message(embed=embed, view=LevelUpChannelView(interaction.guild, self.guild_repository))
 
 
 class MainView(discord.ui.View):
