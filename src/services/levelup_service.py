@@ -29,12 +29,3 @@ class LevelUpService:
         target_channel = self.get_configured_channel(message.guild) or message.channel
         await target_channel.send(formatted_message)
 
-    async def announce_voice_levelup(self, member: discord.Member, new_level: int) -> None:
-        settings = self.guild_repository.fetch_settings(str(member.guild.id))
-        formatted_message = self._format_message(settings, member, new_level)
-        
-        target_channel = self.get_configured_channel(member.guild)
-
-        if target_channel:
-            await target_channel.send(formatted_message)
-

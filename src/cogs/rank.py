@@ -32,7 +32,6 @@ class Rank(commands.Cog):
         voice_record = self.voice_service.fetch_record(user_id, guild_id)
 
         text_xp_required = self.experience_service.calculate_xp_required(text_record.level + 1)
-        voice_xp_required = self.experience_service.calculate_xp_required(voice_record.level + 1)
 
         embed = discord.Embed(
             title=f"{target_member.display_name}'s Stats",
@@ -43,10 +42,9 @@ class Rank(commands.Cog):
         embed.add_field(name="💬 Text XP",   value=f"{text_record.xp} / {text_xp_required}", inline=True)
         embed.add_field(name="\u200b",        value="\u200b", inline=True)
 
-        embed.add_field(name="🎙 Voice Level", value=str(voice_record.level), inline=True)
-        embed.add_field(name="🎙 Voice XP",    value=f"{voice_record.xp} / {voice_xp_required}", inline=True)
-        embed.add_field(name="🕐 Voice Time",  value=format_voice_time(voice_record.total_minutes), inline=True)
+        embed.add_field(name="🕐 Voice Time",  value=format_voice_time(voice_record.total_minutes), inline=False)
 
         embed.set_thumbnail(url=target_member.display_avatar.url)
 
         await interaction.response.send_message(embed=embed)
+
