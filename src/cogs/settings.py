@@ -58,30 +58,36 @@ class TextChannelSelect(discord.ui.ChannelSelect):
     def __init__(self, guild: discord.Guild, channel_repository: ChannelRepository, guild_repository: GuildRepository):
         self.channel_repository = channel_repository
         self.guild_repository = guild_repository
-        self.old_ignored_text = set()
+        self.previous_ignored_text_channel_ids = set()
         
-        ignored = channel_repository.fetch_all(str(guild.id))
-        for cid in ignored:
-            channel = guild.get_channel(int(cid))
-            if channel and channel.type == discord.ChannelType.text:
-                self.old_ignored_text.add(str(cid))
+        all_ignored_channel_ids = channel_repository.fetch_all(str(guild.id))
+        
+        for channel_id_string in all_ignored_channel_ids:
+            channel_instance = guild.get_channel(int(channel_id_string))
+            
+            # Guard clause to ignore deleted channels or voice channels
+            if not channel_instance or channel_instance.type != discord.ChannelType.text:
+                continue
+                
+            self.previous_ignored_text_channel_ids.add(channel_id_string)
 
         super().__init__(
-            placeholder="Select text channels to toggle ignore...",
+            placeholder="Select text channels to ignore...",
             channel_types=[discord.ChannelType.text],
-            min_values=1,
+            min_values=0,
             max_values=25
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        guild_id = str(interaction.guild_id)
+        guild_id_string = str(interaction.guild_id)
         
-        for c in self.values:
-            cid = str(c.id)
-            if cid in self.old_ignored_text:
-                self.channel_repository.remove(cid, guild_id)
-            else:
-                self.channel_repository.add(cid, guild_id)
+        # 1. Remove all old ignored text channels (overwrite mechanism)
+        for old_channel_id in self.previous_ignored_text_channel_ids:
+            self.channel_repository.remove(old_channel_id, guild_id_string)
+            
+        # 2. Add the newly selected text channels
+        for selected_channel in self.values:
+            self.channel_repository.add(str(selected_channel.id), guild_id_string)
 
         embed = build_settings_embed(interaction.guild, self.guild_repository)
         await interaction.response.edit_message(embed=embed, view=TextChannelsView(interaction.guild, self.channel_repository, self.guild_repository))
@@ -91,30 +97,36 @@ class VoiceChannelSelect(discord.ui.ChannelSelect):
     def __init__(self, guild: discord.Guild, channel_repository: ChannelRepository, guild_repository: GuildRepository):
         self.channel_repository = channel_repository
         self.guild_repository = guild_repository
-        self.old_ignored_voice = set()
+        self.previous_ignored_voice_channel_ids = set()
         
-        ignored = channel_repository.fetch_all(str(guild.id))
-        for cid in ignored:
-            channel = guild.get_channel(int(cid))
-            if channel and channel.type == discord.ChannelType.voice:
-                self.old_ignored_voice.add(str(cid))
+        all_ignored_channel_ids = channel_repository.fetch_all(str(guild.id))
+        
+        for channel_id_string in all_ignored_channel_ids:
+            channel_instance = guild.get_channel(int(channel_id_string))
+            
+            # Guard clause to ignore deleted channels or text channels
+            if not channel_instance or channel_instance.type != discord.ChannelType.voice:
+                continue
+                
+            self.previous_ignored_voice_channel_ids.add(channel_id_string)
 
         super().__init__(
-            placeholder="Select voice channels to toggle ignore...",
+            placeholder="Select voice channels to ignore...",
             channel_types=[discord.ChannelType.voice],
-            min_values=1,
+            min_values=0,
             max_values=25
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        guild_id = str(interaction.guild_id)
+        guild_id_string = str(interaction.guild_id)
         
-        for c in self.values:
-            cid = str(c.id)
-            if cid in self.old_ignored_voice:
-                self.channel_repository.remove(cid, guild_id)
-            else:
-                self.channel_repository.add(cid, guild_id)
+        # 1. Remove all old ignored voice channels
+        for old_channel_id in self.previous_ignored_voice_channel_ids:
+            self.channel_repository.remove(old_channel_id, guild_id_string)
+            
+        # 2. Add the newly selected voice channels
+        for selected_channel in self.values:
+            self.channel_repository.add(str(selected_channel.id), guild_id_string)
 
         embed = build_settings_embed(interaction.guild, self.guild_repository)
         await interaction.response.edit_message(embed=embed, view=VoiceChannelsView(interaction.guild, self.channel_repository, self.guild_repository))
@@ -218,11 +230,25 @@ class MainView(discord.ui.View):
 
 def build_settings_embed(guild: discord.Guild, guild_repository: GuildRepository) -> discord.Embed:
     settings = guild_repository.fetch_settings(str(guild.id))
-    ignored_channels = ChannelRepository().fetch_all(str(guild.id))
+    channel_repository = ChannelRepository()
+    
+    all_ignored_channels = channel_repository.fetch_all(str(guild.id))
+    valid_ignored_channels = []
+
+    # Clean up ghost channels that no longer exist in the guild
+    for channel_id_string in all_ignored_channels:
+        channel_instance = guild.get_channel(int(channel_id_string))
+        
+        # Guard clause: if channel is deleted, clean it from DB and don't display
+        if not channel_instance:
+            channel_repository.remove(channel_id_string, str(guild.id))
+            continue
+            
+        valid_ignored_channels.append(channel_id_string)
 
     ignored_channels_display = (
-        ", ".join([f"<#{channel_id}>" for channel_id in ignored_channels])
-        if ignored_channels else "None"
+        ", ".join([f"<#{channel_id_string}>" for channel_id_string in valid_ignored_channels])
+        if valid_ignored_channels else "None"
     )
 
     levelup_channel_display = (

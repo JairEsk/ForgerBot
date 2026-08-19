@@ -38,24 +38,28 @@ class GuildRepository:
         )
 
     def save_cooldown(self, guild_id: str, cooldown: int) -> None:
-        current = self.fetch_settings(guild_id)
-        self._save(guild_id, cooldown, current.levelup_message, current.levelup_channel_id)
-
-    def save_levelup_message(self, guild_id: str, levelup_message: str) -> None:
-        current = self.fetch_settings(guild_id)
-        self._save(guild_id, current.cooldown, levelup_message, current.levelup_channel_id)
-
-    def save_levelup_channel(self, guild_id: str, channel_id: str | None) -> None:
-        current = self.fetch_settings(guild_id)
-        self._save(guild_id, current.cooldown, current.levelup_message, channel_id)
-
-    def _save(self, guild_id: str, cooldown: int, levelup_message: str, levelup_channel_id: str | None) -> None:
         with get_connection() as connection:
             connection.execute("""
-                INSERT INTO guild_settings (guild_id, cooldown, levelup_message, levelup_channel_id)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO guild_settings (guild_id, cooldown)
+                VALUES (?, ?)
                 ON CONFLICT(guild_id) DO UPDATE SET
-                    cooldown           = excluded.cooldown,
-                    levelup_message    = excluded.levelup_message,
+                    cooldown = excluded.cooldown
+            """, (guild_id, cooldown))
+
+    def save_levelup_message(self, guild_id: str, levelup_message: str) -> None:
+        with get_connection() as connection:
+            connection.execute("""
+                INSERT INTO guild_settings (guild_id, levelup_message)
+                VALUES (?, ?)
+                ON CONFLICT(guild_id) DO UPDATE SET
+                    levelup_message = excluded.levelup_message
+            """, (guild_id, levelup_message))
+
+    def save_levelup_channel(self, guild_id: str, channel_id: str | None) -> None:
+        with get_connection() as connection:
+            connection.execute("""
+                INSERT INTO guild_settings (guild_id, levelup_channel_id)
+                VALUES (?, ?)
+                ON CONFLICT(guild_id) DO UPDATE SET
                     levelup_channel_id = excluded.levelup_channel_id
-            """, (guild_id, cooldown, levelup_message, levelup_channel_id))
+            """, (guild_id, channel_id))
