@@ -1,7 +1,13 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-from src.database.guild_repository import GuildRepository
+from src.database.guild_repository import (
+    GuildRepository,
+    LEVELUP_MODE_CURRENT,
+    LEVELUP_MODE_CUSTOM,
+    LEVELUP_MODE_DISABLED,
+    LEVELUP_MODE_DM,
+)
 from src.database.channel_repository import ChannelRepository
 from src.services.cooldown_service import MINIMUM_COOLDOWN_SECONDS, MAXIMUM_COOLDOWN_SECONDS
 
@@ -156,20 +162,90 @@ class VoiceChannelsView(discord.ui.View):
         await interaction.response.edit_message(embed=embed, view=MainView(interaction.guild, self.guild_repository))
 
 
+class LevelUpModeSelect(discord.ui.Select):
+    def __init__(self, guild: discord.Guild, guild_repository: GuildRepository):
+        self.guild_repository = guild_repository
+        current_mode = guild_repository.fetch_settings(str(guild.id)).levelup_mode
+
+        super().__init__(
+            placeholder="Select where level-ups are announced...",
+            options=[
+                discord.SelectOption(
+                    label="Current channel",
+                    value=LEVELUP_MODE_CURRENT,
+                    description="Announce where the member leveled up.",
+                    emoji="💬",
+                    default=current_mode == LEVELUP_MODE_CURRENT
+                ),
+                discord.SelectOption(
+                    label="Custom channel",
+                    value=LEVELUP_MODE_CUSTOM,
+                    description="Always announce in one specific channel.",
+                    emoji="📢",
+                    default=current_mode == LEVELUP_MODE_CUSTOM
+                ),
+                discord.SelectOption(
+                    label="Direct message",
+                    value=LEVELUP_MODE_DM,
+                    description="DM the member who leveled up.",
+                    emoji="✉️",
+                    default=current_mode == LEVELUP_MODE_DM
+                ),
+                discord.SelectOption(
+                    label="Disabled",
+                    value=LEVELUP_MODE_DISABLED,
+                    description="Never announce level-ups.",
+                    emoji="🚫",
+                    default=current_mode == LEVELUP_MODE_DISABLED
+                ),
+            ],
+            row=0
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        selected_mode = self.values[0]
+        settings = self.guild_repository.fetch_settings(str(interaction.guild_id))
+
+        if selected_mode == LEVELUP_MODE_CUSTOM and settings.levelup_channel_id is None:
+            await interaction.response.send_message(
+                "Pick a channel in the dropdown below first — custom mode needs one.",
+                ephemeral=True
+            )
+            return
+
+        self.guild_repository.save_levelup_mode(str(interaction.guild_id), selected_mode)
+
+        embed = build_settings_embed(interaction.guild, self.guild_repository)
+        await interaction.response.edit_message(embed=embed, view=LevelUpChannelView(interaction.guild, self.guild_repository))
+
+
 class LevelUpChannelSelect(discord.ui.ChannelSelect):
     def __init__(self, guild: discord.Guild, guild_repository: GuildRepository):
         self.guild_repository = guild_repository
+        settings = guild_repository.fetch_settings(str(guild.id))
+
+        # Show the saved channel as pre-selected so the panel reflects stored config.
+        default_values = []
+        if settings.levelup_channel_id is not None:
+            default_values = [
+                discord.SelectDefaultValue(
+                    id=int(settings.levelup_channel_id),
+                    type=discord.SelectDefaultValueType.channel
+                )
+            ]
 
         super().__init__(
             placeholder="Select level-up announcement channel...",
             channel_types=[discord.ChannelType.text],
             min_values=1,
-            max_values=1
+            max_values=1,
+            default_values=default_values,
+            row=1
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
         self.guild_repository.save_levelup_channel(str(interaction.guild_id), str(self.values[0].id))
-            
+
         embed = build_settings_embed(interaction.guild, self.guild_repository)
         await interaction.response.edit_message(embed=embed, view=LevelUpChannelView(interaction.guild, self.guild_repository))
 
@@ -178,18 +254,13 @@ class LevelUpChannelView(discord.ui.View):
     def __init__(self, guild: discord.Guild, guild_repository: GuildRepository):
         super().__init__(timeout=120)
         self.guild_repository = guild_repository
+        self.add_item(LevelUpModeSelect(guild, guild_repository))
         self.add_item(LevelUpChannelSelect(guild, guild_repository))
 
-    @discord.ui.button(label="🔙 Back", style=discord.ButtonStyle.secondary, row=1)
+    @discord.ui.button(label="🔙 Back", style=discord.ButtonStyle.secondary, row=2)
     async def back(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         embed = build_settings_embed(interaction.guild, self.guild_repository)
         await interaction.response.edit_message(embed=embed, view=MainView(interaction.guild, self.guild_repository))
-
-    @discord.ui.button(label="🗑️ Clear Channel", style=discord.ButtonStyle.danger, row=1)
-    async def clear_channel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        self.guild_repository.save_levelup_channel(str(interaction.guild_id), None)
-        embed = build_settings_embed(interaction.guild, self.guild_repository)
-        await interaction.response.edit_message(embed=embed, view=LevelUpChannelView(interaction.guild, self.guild_repository))
 
 
 class MainView(discord.ui.View):
@@ -251,10 +322,14 @@ def build_settings_embed(guild: discord.Guild, guild_repository: GuildRepository
         if valid_ignored_channels else "None"
     )
 
-    levelup_channel_display = (
-        f"<#{settings.levelup_channel_id}>"
-        if settings.levelup_channel_id else "Same channel as message"
-    )
+    if settings.levelup_mode == LEVELUP_MODE_CUSTOM:
+        levelup_channel_display = f"<#{settings.levelup_channel_id}>"
+    elif settings.levelup_mode == LEVELUP_MODE_DM:
+        levelup_channel_display = "✉️ Direct message"
+    elif settings.levelup_mode == LEVELUP_MODE_DISABLED:
+        levelup_channel_display = "🚫 Disabled"
+    else:
+        levelup_channel_display = "💬 Same channel as message"
 
     embed = discord.Embed(
         title="⚙️ ForgerBot — Level System Configuration",
