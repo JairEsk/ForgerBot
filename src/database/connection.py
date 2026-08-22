@@ -62,3 +62,17 @@ def initialize_tables() -> None:
             connection, "guild_settings",
             "levelup_channel_id", "TEXT DEFAULT NULL"
         )
+
+        is_new_mode_column = "levelup_mode" not in _get_existing_columns(connection, "guild_settings")
+
+        _add_column_if_missing(
+            connection, "guild_settings",
+            "levelup_mode", "TEXT NOT NULL DEFAULT 'current'"
+        )
+
+        # Existing guilds with a saved channel were implicitly in "custom" mode
+        # before levelup_mode existed, so preserve that intent on first migration.
+        if is_new_mode_column:
+            connection.execute(
+                "UPDATE guild_settings SET levelup_mode = 'custom' WHERE levelup_channel_id IS NOT NULL"
+            )
