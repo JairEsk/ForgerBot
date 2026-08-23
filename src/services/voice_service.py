@@ -73,20 +73,56 @@ class VoiceService:
 
         return flushed
 
+    def _ongoing_minutes(self, key: str) -> int:
+        """Minutes accumulated since the last checkpoint, not yet persisted."""
+        checkpoint = self._active_sessions.get(key)
+
+        if checkpoint is None:
+            return 0
+
+        return max(int((time.time() - checkpoint) / 60), 0)
+
+    def _with_ongoing_minutes(self, record: VoiceExperienceRecord, ongoing_minutes: int) -> VoiceExperienceRecord:
+        if ongoing_minutes == 0:
+            return record
+
+        return VoiceExperienceRecord(
+            xp=record.xp,
+            level=record.level,
+            total_minutes=record.total_minutes + ongoing_minutes
+        )
+
     def fetch_record(self, user_id: str, guild_id: str) -> VoiceExperienceRecord:
         record = self.voice_repository.fetch(user_id, guild_id)
-        key = self._build_key(user_id, guild_id)
-        
-        if key in self._active_sessions:
-            session_start = self._active_sessions[key]
-            ongoing_minutes = int((time.time() - session_start) / 60)
-            
-            if ongoing_minutes > 0:
-                return VoiceExperienceRecord(
-                    xp=record.xp,
-                    level=record.level,
-                    total_minutes=record.total_minutes + ongoing_minutes
-                )
-                
-        return record
+        ongoing_minutes = self._ongoing_minutes(self._build_key(user_id, guild_id))
+
+        return self._with_ongoing_minutes(record, ongoing_minutes)
+
+    def fetch_top_records(self, guild_id: str, limit: int = 10) -> list[tuple[str, VoiceExperienceRecord]]:
+        """Ranking including time from sessions still in progress, matching what /rank reports."""
+        records: dict[str, VoiceExperienceRecord] = dict(
+            self.voice_repository.fetch_top_users(guild_id, limit)
+        )
+
+        # Members currently connected may outrank the stored top once their
+        # in-progress time is counted, so they have to be considered too.
+        for key in self._active_sessions:
+            session_guild_id, session_user_id = key.split(":", 1)
+
+            if session_guild_id != guild_id or session_user_id in records:
+                continue
+
+            records[session_user_id] = self.voice_repository.fetch(session_user_id, guild_id)
+
+        adjusted_records = [
+            (
+                user_id,
+                self._with_ongoing_minutes(record, self._ongoing_minutes(self._build_key(user_id, guild_id)))
+            )
+            for user_id, record in records.items()
+        ]
+
+        adjusted_records.sort(key=lambda entry: entry[1].total_minutes, reverse=True)
+
+        return adjusted_records[:limit]
 
