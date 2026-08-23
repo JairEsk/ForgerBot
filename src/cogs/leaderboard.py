@@ -2,16 +2,16 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from src.database.user_repository import UserRepository
-from src.database.voice_repository import VoiceRepository
+from src.services.voice_service import VoiceService
 from src.cogs.rank import format_voice_time
 
 
 class Leaderboard(commands.Cog):
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot, voice_service: VoiceService):
         self.bot = bot
         self.user_repository = UserRepository()
-        self.voice_repository = VoiceRepository()
+        self.voice_service = voice_service
 
     @app_commands.command(name="leaderboard", description="Shows the server leaderboard.")
     async def leaderboard(self, interaction: discord.Interaction) -> None:
@@ -33,7 +33,7 @@ class Leaderboard(commands.Cog):
         embed.add_field(name="TOP 10 MESSAGES 💬", value=text_lines, inline=True)
 
         # Voice leaderboard
-        top_voice = self.voice_repository.fetch_top_users(guild_id, limit=10)
+        top_voice = self.voice_service.fetch_top_records(guild_id, limit=10)
         if top_voice:
             voice_lines = ""
             for i, (user_id, record) in enumerate(top_voice, start=1):
@@ -47,4 +47,4 @@ class Leaderboard(commands.Cog):
 
 
 async def setup(bot: commands.Bot) -> None:
-    await bot.add_cog(Leaderboard(bot))
+    await bot.add_cog(Leaderboard(bot, bot.voice_service))
