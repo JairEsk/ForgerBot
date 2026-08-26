@@ -2,7 +2,7 @@ import time
 from dataclasses import dataclass
 from src.database.voice_repository import VoiceRepository, VoiceExperienceRecord
 
-MINIMUM_MINUTES_TO_GRANT_XP = 1
+MINIMUM_MINUTES_TO_PERSIST = 1
 
 
 @dataclass
@@ -33,14 +33,7 @@ class VoiceService:
         return minutes_spent
 
     def _award_minutes(self, user_id: str, guild_id: str, minutes_spent: int) -> VoiceSessionResult:
-        current_record = self.voice_repository.fetch(user_id, guild_id)
-
-        updated_record = VoiceExperienceRecord(
-            xp=current_record.xp,
-            level=current_record.level,
-            total_minutes=current_record.total_minutes + minutes_spent
-        )
-        self.voice_repository.save(user_id, guild_id, updated_record)
+        self.voice_repository.add_minutes(user_id, guild_id, minutes_spent)
 
         return VoiceSessionResult(minutes_spent=minutes_spent)
 
@@ -53,7 +46,7 @@ class VoiceService:
         minutes_spent = self._consume_elapsed_minutes(key)
         self._active_sessions.pop(key)
 
-        if minutes_spent < MINIMUM_MINUTES_TO_GRANT_XP:
+        if minutes_spent < MINIMUM_MINUTES_TO_PERSIST:
             return None
 
         return self._award_minutes(user_id, guild_id, minutes_spent)
@@ -66,7 +59,7 @@ class VoiceService:
             guild_id, user_id = key.split(":", 1)
             minutes_spent = self._consume_elapsed_minutes(key)
 
-            if minutes_spent < MINIMUM_MINUTES_TO_GRANT_XP:
+            if minutes_spent < MINIMUM_MINUTES_TO_PERSIST:
                 continue
 
             flushed.append((user_id, guild_id, self._award_minutes(user_id, guild_id, minutes_spent)))
@@ -87,8 +80,6 @@ class VoiceService:
             return record
 
         return VoiceExperienceRecord(
-            xp=record.xp,
-            level=record.level,
             total_minutes=record.total_minutes + ongoing_minutes
         )
 
@@ -125,4 +116,3 @@ class VoiceService:
         adjusted_records.sort(key=lambda entry: entry[1].total_minutes, reverse=True)
 
         return adjusted_records[:limit]
-

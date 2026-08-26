@@ -1,6 +1,18 @@
 # ForgerBot
 Bot 4 discord
 
+## Leveling model
+
+ForgerBot has exactly one level per member and server:
+
+- Eligible text messages award 15-25 cumulative XP, subject to the configured cooldown.
+- The level is always derived from total text XP with `100 * level^2` as the cumulative threshold.
+- Voice activity stores elapsed minutes only. It has no separate XP, level, or level-up announcement.
+- A level-up is announced only when a text XP grant crosses from a lower derived level to a higher one.
+
+At startup, the database migration recovers the original `users` and `voice_sessions`
+tables when present and repairs any cached text level that does not match its XP.
+
 ## Database Backups
 
 The project includes an automated backup service designed to prevent data loss.
@@ -22,6 +34,11 @@ You can configure the backup service using the following environment variables (
 - `AWS_REGION`: S3 Region (default: `us-east-1`).
 - `DAILY_RETENTION`: Number of daily backups to keep (default: 7).
 - `WEEKLY_RETENTION`: Number of weekly backups to keep (default: 4).
+
+The startup log prints the resolved SQLite path and number of text XP records; on
+Dokploy it must report `/data/data.db`. Keep the same Dokploy Compose application
+and named volume across deployments: recreating the application under another name
+can attach a different empty volume.
 
 ### Restoring a Backup
 

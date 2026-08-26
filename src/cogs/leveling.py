@@ -3,7 +3,7 @@ from discord.ext import commands
 from src.services.experience_service import ExperienceService
 from src.services.cooldown_service import CooldownService
 from src.services.levelup_service import LevelUpService
-from src.database.user_repository import UserRepository, TextExperienceRecord
+from src.database.user_repository import UserRepository
 from src.database.channel_repository import ChannelRepository
 
 
@@ -33,11 +33,13 @@ class Leveling(commands.Cog):
 
         self.cooldown_service.register(user_id, guild_id)
 
-        current_record = self.user_repository.fetch(user_id, guild_id)
         xp_to_grant = self.experience_service.random_message_xp()
-        result = self.experience_service.compute_grant(current_record.xp, current_record.level, xp_to_grant)
-
-        self.user_repository.save(user_id, guild_id, TextExperienceRecord(xp=result.xp, level=result.level))
+        result = self.user_repository.grant_xp(
+            user_id,
+            guild_id,
+            xp_to_grant,
+            self.experience_service
+        )
 
         if result.leveled_up:
             await self.levelup_service.announce_text_levelup(message, result.level)
