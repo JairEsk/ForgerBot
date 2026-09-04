@@ -66,8 +66,6 @@ class Voice(commands.Cog):
                     continue
                 for member in voice_channel.members:
                     if not member.bot:
-                        if settings.auto_ignore_afk and member.voice and member.voice.afk:
-                            continue
                         self.voice_service.start_session(str(member.id), str(guild.id))
 
     @commands.Cog.listener()
