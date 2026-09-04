@@ -269,7 +269,15 @@ class MainView(discord.ui.View):
         self.guild_repository = guild_repository
         self.channel_repository = channel_repository or ChannelRepository()
 
-    @discord.ui.button(label="📢 Level-up Channel", style=discord.ButtonStyle.primary)
+        settings = self.guild_repository.fetch_settings(str(guild.id))
+        if settings.auto_ignore_afk:
+            self.toggle_afk_button.label = "💤 AFK: Auto (ON)"
+            self.toggle_afk_button.style = discord.ButtonStyle.success
+        else:
+            self.toggle_afk_button.label = "💤 AFK: Auto (OFF)"
+            self.toggle_afk_button.style = discord.ButtonStyle.secondary
+
+    @discord.ui.button(label="📢 Level-up Channel", style=discord.ButtonStyle.primary, row=0)
     async def levelup_channel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.edit_message(view=LevelUpChannelView(interaction.guild, self.guild_repository))
 
@@ -292,6 +300,35 @@ class MainView(discord.ui.View):
     @discord.ui.button(label="📢 Message", style=discord.ButtonStyle.secondary, row=1)
     async def message(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.send_modal(LevelupMessageModal(self.guild_repository))
+
+    @discord.ui.button(label="💤 AFK: Auto", style=discord.ButtonStyle.secondary, row=1)
+    async def toggle_afk_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        settings = self.guild_repository.fetch_settings(str(interaction.guild_id))
+        new_state = not settings.auto_ignore_afk
+        self.guild_repository.save_auto_ignore_afk(str(interaction.guild_id), new_state)
+
+        # Synchronize active sessions if an AFK channel exists
+        if interaction.guild and interaction.guild.afk_channel:
+            voice_service = getattr(interaction.client, "voice_service", None)
+            if voice_service:
+                guild_id_str = str(interaction.guild_id)
+                for member in interaction.guild.afk_channel.members:
+                    if member.bot:
+                        continue
+                    user_id_str = str(member.id)
+                    if new_state:
+                        # Auto-exclusion enabled: end any session in AFK channel
+                        voice_service.end_session(user_id_str, guild_id_str)
+                    else:
+                        # Auto-exclusion disabled: start session if channel not manually ignored
+                        if not self.channel_repository.is_ignored(str(interaction.guild.afk_channel.id), guild_id_str):
+                            voice_service.start_session(user_id_str, guild_id_str)
+
+        embed = build_settings_embed(interaction.guild, self.guild_repository)
+        await interaction.response.edit_message(
+            embed=embed,
+            view=MainView(interaction.guild, self.guild_repository, self.channel_repository)
+        )
 
     @discord.ui.button(label="✖ Close", style=discord.ButtonStyle.danger, row=2)
     async def close(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -331,12 +368,21 @@ def build_settings_embed(guild: discord.Guild, guild_repository: GuildRepository
     else:
         levelup_channel_display = "💬 Same channel as message"
 
+    if settings.auto_ignore_afk:
+        if guild.afk_channel:
+            afk_display = f"✅ Enabled (<#{guild.afk_channel.id}>)"
+        else:
+            afk_display = "✅ Enabled *(no AFK channel set)*"
+    else:
+        afk_display = "❌ Disabled"
+
     embed = discord.Embed(
         title="⚙️ ForgerBot — Level System Configuration",
         color=discord.Color.blurple()
     )
     embed.add_field(name="⏱ Cooldown",           value=f"`{settings.cooldown}s`", inline=True)
     embed.add_field(name="📢 Level-up Channel",   value=levelup_channel_display, inline=True)
+    embed.add_field(name="💤 Auto-Exclude AFK",   value=afk_display, inline=True)
     embed.add_field(name="🔇 Ignored Channels",   value=ignored_channels_display, inline=False)
     embed.add_field(name="📢 Level-up Message",   value=f"`{settings.levelup_message}`", inline=False)
     embed.set_footer(text=f"Server: {guild.name}")
@@ -354,6 +400,10 @@ class Settings(commands.Cog):
     @app_commands.command(name="configure", description="Open the ForgerBot configuration panel.")
     @app_commands.checks.has_permissions(administrator=True)
     async def configure(self, interaction: discord.Interaction) -> None:
+        if interaction.guild is None:
+            await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+            return
+
         embed = build_settings_embed(interaction.guild, self.guild_repository)
         await interaction.response.send_message(
             embed=embed,

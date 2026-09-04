@@ -8,6 +8,7 @@ from pathlib import Path
 from src.database import connection as database_connection
 from src.database.user_repository import UserRepository
 from src.database.voice_repository import VoiceRepository
+from src.database.guild_repository import GuildRepository
 from src.services.experience_service import ExperienceService
 
 
@@ -143,6 +144,82 @@ class LegacyMigrationTests(TemporaryDatabaseTestCase):
             }
 
         self.assertEqual(columns, {"user_id", "guild_id", "total_minutes"})
+
+
+class GuildSettingsRepositoryTests(TemporaryDatabaseTestCase):
+
+    def setUp(self) -> None:
+        super().setUp()
+        database_connection.initialize_tables()
+        self.repository = GuildRepository()
+
+    def test_default_settings_have_auto_ignore_afk_enabled(self) -> None:
+        settings = self.repository.fetch_settings("new_guild")
+        self.assertTrue(settings.auto_ignore_afk)
+
+    def test_save_auto_ignore_afk_persists_state(self) -> None:
+        self.repository.save_auto_ignore_afk("guild_1", False)
+        settings = self.repository.fetch_settings("guild_1")
+        self.assertFalse(settings.auto_ignore_afk)
+
+        self.repository.save_auto_ignore_afk("guild_1", True)
+        settings = self.repository.fetch_settings("guild_1")
+        self.assertTrue(settings.auto_ignore_afk)
+
+    def test_saving_auto_ignore_afk_preserves_cooldown_and_levelup_config(self) -> None:
+        self.repository.save_cooldown("guild_2", 120)
+        self.repository.save_levelup_message("guild_2", "Level {level} reached!")
+        self.repository.save_auto_ignore_afk("guild_2", False)
+
+        settings = self.repository.fetch_settings("guild_2")
+        self.assertEqual(settings.cooldown, 120)
+        self.assertEqual(settings.levelup_message, "Level {level} reached!")
+        self.assertFalse(settings.auto_ignore_afk)
+
+    def test_saving_other_settings_preserves_auto_ignore_afk(self) -> None:
+        self.repository.save_auto_ignore_afk("guild_3", False)
+        self.repository.save_cooldown("guild_3", 90)
+
+        settings = self.repository.fetch_settings("guild_3")
+        self.assertEqual(settings.cooldown, 90)
+        self.assertFalse(settings.auto_ignore_afk)
+
+    def test_legacy_database_without_afk_column_is_migrated_without_data_loss(self) -> None:
+        # Simulate an existing database created before the auto_ignore_afk column existed
+        with closing(sqlite3.connect(self.database_path)) as connection:
+            connection.executescript("""
+                DROP TABLE IF EXISTS guild_settings;
+                CREATE TABLE guild_settings (
+                    guild_id        TEXT PRIMARY KEY,
+                    cooldown        INTEGER NOT NULL DEFAULT 60,
+                    levelup_message TEXT    NOT NULL DEFAULT 'test',
+                    levelup_channel_id TEXT DEFAULT '999',
+                    levelup_mode    TEXT NOT NULL DEFAULT 'custom'
+                );
+                INSERT INTO guild_settings VALUES ('existing_guild', 45, 'Welcome {level}!', '999', 'custom');
+            """)
+            connection.commit()
+
+        # Re-run initialization
+        database_connection.initialize_tables()
+
+        settings = self.repository.fetch_settings("existing_guild")
+        self.assertEqual(settings.cooldown, 45)
+        self.assertEqual(settings.levelup_message, "Welcome {level}!")
+        self.assertEqual(settings.levelup_channel_id, "999")
+        self.assertEqual(settings.levelup_mode, "custom")
+        self.assertTrue(settings.auto_ignore_afk)
+
+    def test_null_auto_ignore_afk_falls_back_to_default(self) -> None:
+        with closing(sqlite3.connect(self.database_path)) as connection:
+            connection.execute(
+                "INSERT INTO guild_settings (guild_id, cooldown, auto_ignore_afk) VALUES (?, ?, NULL)",
+                ("guild_null_afk", 60)
+            )
+            connection.commit()
+
+        settings = self.repository.fetch_settings("guild_null_afk")
+        self.assertTrue(settings.auto_ignore_afk)
 
 
 if __name__ == "__main__":

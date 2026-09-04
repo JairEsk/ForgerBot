@@ -17,6 +17,7 @@ VALID_LEVELUP_MODES = {
 }
 
 DEFAULT_LEVELUP_MODE = LEVELUP_MODE_CURRENT
+DEFAULT_AUTO_IGNORE_AFK = True
 
 
 @dataclass
@@ -25,13 +26,15 @@ class GuildSettings:
     levelup_message: str
     levelup_channel_id: str | None
     levelup_mode: str
+    auto_ignore_afk: bool = DEFAULT_AUTO_IGNORE_AFK
 
 
 DEFAULT_SETTINGS = GuildSettings(
     cooldown=DEFAULT_COOLDOWN,
     levelup_message=DEFAULT_LEVELUP_MESSAGE,
     levelup_channel_id=None,
-    levelup_mode=DEFAULT_LEVELUP_MODE
+    levelup_mode=DEFAULT_LEVELUP_MODE,
+    auto_ignore_afk=DEFAULT_AUTO_IGNORE_AFK
 )
 
 
@@ -40,7 +43,7 @@ class GuildRepository:
     def fetch_settings(self, guild_id: str) -> GuildSettings:
         with get_connection() as connection:
             row = connection.execute(
-                "SELECT cooldown, levelup_message, levelup_channel_id, levelup_mode FROM guild_settings WHERE guild_id = ?",
+                "SELECT cooldown, levelup_message, levelup_channel_id, levelup_mode, auto_ignore_afk FROM guild_settings WHERE guild_id = ?",
                 (guild_id,)
             ).fetchone()
 
@@ -56,11 +59,15 @@ class GuildRepository:
         if mode == LEVELUP_MODE_CUSTOM and row["levelup_channel_id"] is None:
             mode = LEVELUP_MODE_CURRENT
 
+        raw_afk = row["auto_ignore_afk"]
+        auto_ignore_afk = bool(raw_afk) if raw_afk is not None else DEFAULT_AUTO_IGNORE_AFK
+
         return GuildSettings(
             cooldown=row["cooldown"],
             levelup_message=row["levelup_message"],
             levelup_channel_id=row["levelup_channel_id"],
-            levelup_mode=mode
+            levelup_mode=mode,
+            auto_ignore_afk=auto_ignore_afk
         )
 
     def save_cooldown(self, guild_id: str, cooldown: int) -> None:
@@ -104,3 +111,12 @@ class GuildRepository:
                 ON CONFLICT(guild_id) DO UPDATE SET
                     levelup_mode = excluded.levelup_mode
             """, (guild_id, mode))
+
+    def save_auto_ignore_afk(self, guild_id: str, enabled: bool) -> None:
+        with get_connection() as connection:
+            connection.execute("""
+                INSERT INTO guild_settings (guild_id, auto_ignore_afk)
+                VALUES (?, ?)
+                ON CONFLICT(guild_id) DO UPDATE SET
+                    auto_ignore_afk = excluded.auto_ignore_afk
+            """, (guild_id, 1 if enabled else 0))

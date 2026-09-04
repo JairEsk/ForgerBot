@@ -123,7 +123,10 @@ def initialize_tables() -> None:
             CREATE TABLE IF NOT EXISTS guild_settings (
                 guild_id        TEXT PRIMARY KEY,
                 cooldown        INTEGER NOT NULL DEFAULT 60,
-                levelup_message TEXT    NOT NULL DEFAULT '🎉 {user} just reached level **{level}**!'
+                levelup_message TEXT    NOT NULL DEFAULT '🎉 {user} just reached level **{level}**!',
+                levelup_channel_id TEXT DEFAULT NULL,
+                levelup_mode    TEXT NOT NULL DEFAULT 'current',
+                auto_ignore_afk INTEGER NOT NULL DEFAULT 1
             );
         """)
 
@@ -137,6 +140,11 @@ def initialize_tables() -> None:
         _add_column_if_missing(
             connection, "guild_settings",
             "levelup_mode", "TEXT NOT NULL DEFAULT 'current'"
+        )
+
+        _add_column_if_missing(
+            connection, "guild_settings",
+            "auto_ignore_afk", "INTEGER NOT NULL DEFAULT 1"
         )
 
         # Existing guilds with a saved channel were implicitly in "custom" mode
