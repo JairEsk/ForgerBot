@@ -37,14 +37,11 @@ class Voice(commands.Cog):
         if channel is None:
             return True
 
-        guild_id = str(guild.id)
-        if self.channel_repository.is_ignored(str(channel.id), guild_id):
-            return True
-
         if settings.auto_ignore_afk and guild.afk_channel is not None and channel.id == guild.afk_channel.id:
             return True
 
-        return False
+        guild_id = str(guild.id)
+        return self.channel_repository.is_ignored(str(channel.id), guild_id)
 
     def _is_voice_state_valid(
         self,
