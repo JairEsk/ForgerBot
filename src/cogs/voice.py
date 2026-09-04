@@ -83,6 +83,9 @@ class Voice(commands.Cog):
         if member.bot:
             return
 
+        if before.channel == after.channel:
+            return
+
         user_id = str(member.id)
         guild_id = str(member.guild.id)
         settings = self.guild_repository.fetch_settings(guild_id)
