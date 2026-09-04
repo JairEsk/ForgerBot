@@ -210,6 +210,17 @@ class GuildSettingsRepositoryTests(TemporaryDatabaseTestCase):
         self.assertEqual(settings.levelup_mode, "custom")
         self.assertTrue(settings.auto_ignore_afk)
 
+    def test_null_auto_ignore_afk_falls_back_to_default(self) -> None:
+        with closing(sqlite3.connect(self.database_path)) as connection:
+            connection.execute(
+                "INSERT INTO guild_settings (guild_id, cooldown, auto_ignore_afk) VALUES (?, ?, NULL)",
+                ("guild_null_afk", 60)
+            )
+            connection.commit()
+
+        settings = self.repository.fetch_settings("guild_null_afk")
+        self.assertTrue(settings.auto_ignore_afk)
+
 
 if __name__ == "__main__":
     unittest.main()

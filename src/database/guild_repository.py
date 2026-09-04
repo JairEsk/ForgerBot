@@ -59,7 +59,8 @@ class GuildRepository:
         if mode == LEVELUP_MODE_CUSTOM and row["levelup_channel_id"] is None:
             mode = LEVELUP_MODE_CURRENT
 
-        auto_ignore_afk = bool(row["auto_ignore_afk"]) if "auto_ignore_afk" in row.keys() else DEFAULT_AUTO_IGNORE_AFK
+        raw_afk = row["auto_ignore_afk"]
+        auto_ignore_afk = bool(raw_afk) if raw_afk is not None else DEFAULT_AUTO_IGNORE_AFK
 
         return GuildSettings(
             cooldown=row["cooldown"],
