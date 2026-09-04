@@ -266,7 +266,6 @@ class LevelUpChannelView(discord.ui.View):
 class MainView(discord.ui.View):
     def __init__(self, guild: discord.Guild, guild_repository: GuildRepository, channel_repository: ChannelRepository = None):
         super().__init__(timeout=120)
-        self.guild = guild
         self.guild_repository = guild_repository
         self.channel_repository = channel_repository or ChannelRepository()
 
@@ -398,7 +397,9 @@ class Settings(commands.Cog):
         self.guild_repository = GuildRepository()
         self.channel_repository = ChannelRepository()
 
-    async def _handle_configure(self, interaction: discord.Interaction) -> None:
+    @app_commands.command(name="configure", description="Open the ForgerBot configuration panel.")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def configure(self, interaction: discord.Interaction) -> None:
         if interaction.guild is None:
             await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
             return
@@ -410,18 +411,7 @@ class Settings(commands.Cog):
             ephemeral=True
         )
 
-    @app_commands.command(name="configure", description="Open the ForgerBot configuration panel.")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def configure(self, interaction: discord.Interaction) -> None:
-        await self._handle_configure(interaction)
-
-    @app_commands.command(name="config", description="Open the ForgerBot configuration panel.")
-    @app_commands.checks.has_permissions(administrator=True)
-    async def config(self, interaction: discord.Interaction) -> None:
-        await self._handle_configure(interaction)
-
     @configure.error
-    @config.error
     async def configure_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
         if isinstance(error, app_commands.MissingPermissions):
             await interaction.response.send_message(

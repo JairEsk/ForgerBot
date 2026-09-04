@@ -120,4 +120,3 @@ class GuildRepository:
                 ON CONFLICT(guild_id) DO UPDATE SET
                     auto_ignore_afk = excluded.auto_ignore_afk
             """, (guild_id, 1 if enabled else 0))
-
