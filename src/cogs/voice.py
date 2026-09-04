@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands, tasks
 from src.services.voice_service import VoiceService
 from src.database.channel_repository import ChannelRepository
+from src.database.guild_repository import GuildRepository, GuildSettings
 
 CHECKPOINT_INTERVAL_MINUTES = 1
 
@@ -12,6 +13,7 @@ class Voice(commands.Cog):
         self.bot = bot
         self.voice_service = voice_service
         self.channel_repository = ChannelRepository()
+        self.guild_repository = GuildRepository()
         self.checkpoint_sessions.start()
 
     async def cog_unload(self) -> None:
@@ -26,14 +28,49 @@ class Voice(commands.Cog):
     async def before_checkpoint_sessions(self) -> None:
         await self.bot.wait_until_ready()
 
+    def _is_channel_ignored(
+        self,
+        channel: discord.abc.Connectable | None,
+        guild: discord.Guild,
+        settings: GuildSettings
+    ) -> bool:
+        if channel is None:
+            return True
+
+        guild_id = str(guild.id)
+        if self.channel_repository.is_ignored(str(channel.id), guild_id):
+            return True
+
+        if settings.auto_ignore_afk and guild.afk_channel is not None and channel.id == guild.afk_channel.id:
+            return True
+
+        return False
+
+    def _is_voice_state_valid(
+        self,
+        state: discord.VoiceState,
+        guild: discord.Guild,
+        settings: GuildSettings
+    ) -> bool:
+        if state.channel is None:
+            return False
+
+        if settings.auto_ignore_afk and state.afk:
+            return False
+
+        return not self._is_channel_ignored(state.channel, guild, settings)
+
     @commands.Cog.listener()
     async def on_ready(self) -> None:
         for guild in self.bot.guilds:
+            settings = self.guild_repository.fetch_settings(str(guild.id))
             for voice_channel in guild.voice_channels:
-                if self.channel_repository.is_ignored(str(voice_channel.id), str(guild.id)):
+                if self._is_channel_ignored(voice_channel, guild, settings):
                     continue
                 for member in voice_channel.members:
                     if not member.bot:
+                        if settings.auto_ignore_afk and member.voice and member.voice.afk:
+                            continue
                         self.voice_service.start_session(str(member.id), str(guild.id))
 
     @commands.Cog.listener()
@@ -48,17 +85,10 @@ class Voice(commands.Cog):
 
         user_id = str(member.id)
         guild_id = str(member.guild.id)
+        settings = self.guild_repository.fetch_settings(guild_id)
 
-        is_before_ignored = False
-        if before.channel:
-            is_before_ignored = self.channel_repository.is_ignored(str(before.channel.id), guild_id)
-
-        is_after_ignored = False
-        if after.channel:
-            is_after_ignored = self.channel_repository.is_ignored(str(after.channel.id), guild_id)
-
-        was_valid = before.channel is not None and not is_before_ignored
-        is_valid = after.channel is not None and not is_after_ignored
+        was_valid = self._is_voice_state_valid(before, member.guild, settings)
+        is_valid = self._is_voice_state_valid(after, member.guild, settings)
 
         joined_valid = not was_valid and is_valid
         left_valid = was_valid and not is_valid
