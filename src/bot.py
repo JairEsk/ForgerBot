@@ -8,6 +8,7 @@ COGS = [
     "src.cogs.leveling",
     "src.cogs.settings",
     "src.cogs.leaderboard",
+    "src.cogs.moderation",
 ]
 
 class ForgerBot(commands.Bot):
