@@ -15,6 +15,9 @@ class ModerationCogTests(unittest.IsolatedAsyncioTestCase):
     async def test_clear_purges_amount_plus_invoker_and_reports_count(self) -> None:
         context = MagicMock(spec=commands.Context)
         context.channel = MagicMock()
+        context.author = MagicMock()
+        context.author.__str__.return_value = "Moderator#0001"
+        context.author.id = 999
         invoking_message = MagicMock(spec=discord.Message)
         invoking_message.id = 123
         context.message = invoking_message
@@ -29,7 +32,10 @@ class ModerationCogTests(unittest.IsolatedAsyncioTestCase):
 
         await self.cog.clear.callback(self.cog, context, amount=2)
 
-        context.channel.purge.assert_awaited_once_with(limit=3)
+        context.channel.purge.assert_awaited_once_with(
+            limit=3,
+            reason="Clear command invoked by Moderator#0001 (ID: 999)"
+        )
         context.channel.send.assert_awaited_once_with(
             "Deleted 2 message(s).",
             delete_after=5.0
@@ -38,6 +44,9 @@ class ModerationCogTests(unittest.IsolatedAsyncioTestCase):
     async def test_clear_without_invoking_message_in_purge_counts_all(self) -> None:
         context = MagicMock(spec=commands.Context)
         context.channel = MagicMock()
+        context.author = MagicMock()
+        context.author.__str__.return_value = "Moderator#0001"
+        context.author.id = 999
         invoking_message = MagicMock(spec=discord.Message)
         invoking_message.id = 123
         context.message = invoking_message
@@ -52,6 +61,10 @@ class ModerationCogTests(unittest.IsolatedAsyncioTestCase):
 
         await self.cog.clear.callback(self.cog, context, amount=2)
 
+        context.channel.purge.assert_awaited_once_with(
+            limit=3,
+            reason="Clear command invoked by Moderator#0001 (ID: 999)"
+        )
         context.channel.send.assert_awaited_once_with(
             "Deleted 2 message(s).",
             delete_after=5.0

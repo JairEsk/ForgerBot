@@ -24,7 +24,10 @@ class Moderation(commands.Cog):
             return
 
         # The invoking message counts as one deletion so the user sees `amount` removed.
-        deleted_messages = await context.channel.purge(limit=amount + 1)
+        deleted_messages = await context.channel.purge(
+            limit=amount + 1,
+            reason=f"Clear command invoked by {context.author} (ID: {context.author.id})"
+        )
         was_invoker_deleted = any(msg.id == context.message.id for msg in deleted_messages)
         deleted_count = len(deleted_messages) - (1 if was_invoker_deleted else 0)
 
